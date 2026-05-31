@@ -1,0 +1,38 @@
+[
+  {
+    "id": "log-001",
+    "name": "Patio de Maniobras Cedis",
+    "sector": "LOGISTICA",
+    "riskBase": 75,
+    "parents": [],
+    "isKilled": false,
+    "owner": "Carlos Ruiz - Jefe de Patio",
+    "leakType": "TIEMPOS_MUERTOS",
+    "actionPlan": "Implementar sistema de citas automáticas para transportistas",
+    "financialImpact": { "dailyLoss": 1200, "monthlyLoss": 36000, "yearlyLoss": 432000, "currency": "USD" }
+  },
+  {
+    "id": "log-002",
+    "name": "Despacho a Cliente Final",
+    "sector": "LOGISTICA",
+    "riskBase": 30,
+    "parents": ["log-001"],
+    "isKilled": false,
+    "owner": "Ana Gómez - Gerente de Última Milla",
+    "leakType": "PENALIZACIONES_DOC",
+    "actionPlan": "Digitalizar guías y CFDI antes de la salida",
+    "financialImpact": { "dailyLoss": 800, "monthlyLoss": 24000, "yearlyLoss": 288000, "currency": "USD" }
+  },
+  {
+    "id": "log-003",
+    "name": "Aduanas y Documentación",
+    "sector": "LOGISTICA",
+    "riskBase": 60,
+    "parents": [],
+    "isKilled": false,
+    "owner": "Luis Mendoza - Coord. Aduanal",
+    "leakType": "FRAGMENTACION_INFO",
+    "actionPlan": "Unificar ERP con portal de aduanas",
+    "financialImpact": { "dailyLoss": 2500, "monthlyLoss": 75000, "yearlyLoss": 900000, "currency": "USD" }
+  }
+]
