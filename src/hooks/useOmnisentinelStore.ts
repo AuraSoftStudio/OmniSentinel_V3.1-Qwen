@@ -4,11 +4,11 @@ import { persist } from 'zustand/middleware';
 import { vcoreWorker } from '../services/vcoreService';
 import { idbStorage, exportProject, importProject } from '../services/storage';
 import { getApplicableActions } from '../config/actionPlans';
-import type { ProjectNode } from '../types/omnisentinel'; // Asegúrate de importar desde types
+import type { ProjectNode } from '../types/omnisentinel';
 import { wrap } from 'comlink';
 import type { MonteCarloInput, MonteCarloResult, SimulationRange } from '../core/montecarlo.worker';
 
-// 🔥 IMPORTAR TEMPLATE HARDCODEADO
+//  IMPORTAR TEMPLATE HARDCODEADO
 import { LOGISTICA_TEMPLATE } from '../data/logistica-template';
 
 // Inicializar Worker de Monte Carlo
@@ -95,10 +95,9 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       isMcRunning: false,
       currency: 'USD',
 
-      // 🔥 FIX: Carga segura sin red (Hardcoded)
+      // 🔥 FIX: Carga segura con TIMEOUT (Nunca se queda pegado)
       init: async () => {
         const { rawNodes } = get();
-        // Si ya hay datos en memoria (por persistencia), recalcula y termina
         if (rawNodes.length > 0) {
           console.log("✅ [STORE] Datos recuperados. Recalculando...");
           get().recalculate();
@@ -108,33 +107,47 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         console.log("🚀 [STORE] Cargando template hardcodeado...");
         set({ isLoading: true });
 
-        // Simulamos un pequeño delay para que se vea el splash screen
-        setTimeout(() => {
-          try {
-            // Cargamos el template directamente desde el archivo JS
-            get().loadCustomNodes(LOGISTICA_TEMPLATE as unknown as ProjectNode[]);
-          } catch (e) {
-            console.error("❌ [STORE] Error cargando template:", e);
-            set({ isLoading: false });
-          }
-        }, 500);
+        // 🔥 TIMEOUT DE SEGURIDAD: Si tarda más de 5s, se desbloquea
+        const safetyTimer = setTimeout(() => {
+          console.warn("⏱️ [STORE] TIMEOUT: La carga tardó demasiado. Desbloqueando UI.");
+          set({ isLoading: false });
+        }, 5000);
+
+        try {
+          get().loadCustomNodes(LOGISTICA_TEMPLATE as unknown as ProjectNode[]);
+          clearTimeout(safetyTimer); // Cancelar timer si todo sale bien
+        } catch (e) {
+          console.error("❌ [STORE] Error crítico:", e);
+          clearTimeout(safetyTimer);
+          set({ isLoading: false });
+        }
       },
 
       loadCustomNodes: (nodes: ProjectNode[]) => {
         console.log("📥 [STORE] Nodos cargados:", nodes.length);
         set({ rawNodes: nodes, isLoading: true, dataSource: 'CSV_IMPORT' });
-        get().recalculate().finally(() => set({ isLoading: false }));
+        
+        // 🔥 TIMEOUT DE SEGURIDAD para recalculate
+        const safetyTimer = setTimeout(() => {
+          console.warn("⏱️ [STORE] TIMEOUT: recalculate colgado. Desbloqueando UI.");
+          set({ isLoading: false });
+        }, 5000);
+
+        get().recalculate().finally(() => {
+          clearTimeout(safetyTimer);
+          set({ isLoading: false });
+        });
       },
 
       recalculate: async () => {
         const { rawNodes, simulationVars } = get();
         if (rawNodes.length === 0) {
-          console.warn("⚠️ [V-CORE] Sin nodos para calcular.");
+          console.warn("⚠️ [V-CORE] Sin nodos.");
           set({ isCalculating: false });
           return;
         }
         
-        console.log("⚙️ [V-CORE] Iniciando cálculo en Web Worker...");
+        console.log("⚙️ [V-CORE] Iniciando cálculo...");
         set({ isCalculating: true });
 
         try {
@@ -150,7 +163,13 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
             return s;
           });
 
-          const result = await vcoreWorker.processGraph(simulatedNodes);
+          // 🔥 PROMESA CON TIMEOUT para el Worker
+          const workerCall = vcoreWorker.processGraph(simulatedNodes);
+          const timeoutCall = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout del Worker (5s)")), 5000)
+          );
+
+          const result = await Promise.race([workerCall, timeoutCall]);
 
           set({
             processedNodes: result.nodes,
@@ -159,11 +178,12 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
             isCalculating: false,
             isSimulationActive: Object.values(simulationVars).some(r => r.min !== r.max || r.min !== 0 && r.min !== 100 && r.min !== 1)
           });
-          console.log("✅ [V-CORE] Cálculo exitoso.");
+          console.log("✅ [V-CORE] Éxito.");
         } catch (err) {
-          // 🔥 FIX: Si el worker falla, NO nos quedamos cargando para siempre
-          console.error('❌ [V-CORE] Error crítico:', err);
+          console.error('❌ [V-CORE] Error:', err);
           set({ isCalculating: false });
+          // Si falla, mostramos alerta pero no bloqueamos
+          // alert("Error calculando riesgos. Revisa la consola."); 
         }
       },
 
@@ -234,12 +254,26 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       },
 
       handleImportProject: async (file: File) => {
+        console.log(" [STORE] Importando archivo...");
+        set({ isLoading: true }); // Mostrar loading al importar
+        
+        // 🔥 TIMEOUT DE SEGURIDAD para importación
+        const safetyTimer = setTimeout(() => {
+          console.warn("⏱️ [STORE] TIMEOUT: Importación colgada.");
+          set({ isLoading: false });
+        }, 5000);
+
         try {
           const data = await importProject(file);
           set({ rawNodes: data.rawNodes, simulationVars: data.simulationVars, currency: data.currency });
-          get().recalculate();
+          await get().recalculate(); // Esperar a que termine
+          clearTimeout(safetyTimer);
         } catch (err) {
+          console.error("❌ [STORE] Error importando:", err);
           alert('Error al importar: ' + (err as Error).message);
+          clearTimeout(safetyTimer);
+        } finally {
+          set({ isLoading: false }); // Siempre desbloquear
         }
       },
 
