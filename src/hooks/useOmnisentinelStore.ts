@@ -7,11 +7,8 @@ import { getApplicableActions } from '../config/actionPlans';
 import type { ProjectNode } from '../types/omnisentinel';
 import { wrap } from 'comlink';
 import type { MonteCarloInput, MonteCarloResult, SimulationRange } from '../core/montecarlo.worker';
-
-//  IMPORTAR TEMPLATE HARDCODEADO
 import { LOGISTICA_TEMPLATE } from '../data/logistica-template';
 
-// Inicializar Worker de Monte Carlo
 const McWorker = new Worker(new URL('../core/montecarlo.worker.ts', import.meta.url), { type: 'module' });
 const mcWorker = wrap<typeof import('../core/montecarlo.worker')>(McWorker);
 
@@ -95,7 +92,6 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       isMcRunning: false,
       currency: 'USD',
 
-      // 🔥 FIX: Carga segura con TIMEOUT (Nunca se queda pegado)
       init: async () => {
         const { rawNodes } = get();
         if (rawNodes.length > 0) {
@@ -107,15 +103,14 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         console.log("🚀 [STORE] Cargando template hardcodeado...");
         set({ isLoading: true });
 
-        // 🔥 TIMEOUT DE SEGURIDAD: Si tarda más de 5s, se desbloquea
         const safetyTimer = setTimeout(() => {
-          console.warn("⏱️ [STORE] TIMEOUT: La carga tardó demasiado. Desbloqueando UI.");
+          console.warn("⏱️ [STORE] TIMEOUT: Desbloqueando UI.");
           set({ isLoading: false });
         }, 5000);
 
         try {
           get().loadCustomNodes(LOGISTICA_TEMPLATE as unknown as ProjectNode[]);
-          clearTimeout(safetyTimer); // Cancelar timer si todo sale bien
+          clearTimeout(safetyTimer);
         } catch (e) {
           console.error("❌ [STORE] Error crítico:", e);
           clearTimeout(safetyTimer);
@@ -127,9 +122,8 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         console.log("📥 [STORE] Nodos cargados:", nodes.length);
         set({ rawNodes: nodes, isLoading: true, dataSource: 'CSV_IMPORT' });
         
-        // 🔥 TIMEOUT DE SEGURIDAD para recalculate
         const safetyTimer = setTimeout(() => {
-          console.warn("⏱️ [STORE] TIMEOUT: recalculate colgado. Desbloqueando UI.");
+          console.warn("⏱️ [STORE] TIMEOUT: recalculate colgado.");
           set({ isLoading: false });
         }, 5000);
 
@@ -154,22 +148,22 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           const getMid = (r: SimulationRange) => (r.min + r.max) / 2;
           
           const simulatedNodes = rawNodes.map(node => {
-            const s = { ...node };
+            const s: any = { ...node };
             const midInflation = getMid(simulationVars.inflation);
             if (midInflation > 0) s.daily_operation_cost *= (1 + midInflation / 100);
             
             const midCapacity = getMid(simulationVars.capacity);
             if (midCapacity < 100) s.saturacionFlota = Math.min(1, s.saturacionFlota + (100 - midCapacity) / 200);
-            return s;
+            return s as ProjectNode;
           });
 
-          // 🔥 PROMESA CON TIMEOUT para el Worker
-          const workerCall = vcoreWorker.processGraph(simulatedNodes);
+          // 🔥 FIX: Type assertion para el resultado del worker
+          const workerCall = vcoreWorker.processGraph(simulatedNodes as any);
           const timeoutCall = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout del Worker (5s)")), 5000)
           );
 
-          const result = await Promise.race([workerCall, timeoutCall]);
+          const result: any = await Promise.race([workerCall, timeoutCall]);
 
           set({
             processedNodes: result.nodes,
@@ -182,8 +176,6 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         } catch (err) {
           console.error('❌ [V-CORE] Error:', err);
           set({ isCalculating: false });
-          // Si falla, mostramos alerta pero no bloqueamos
-          // alert("Error calculando riesgos. Revisa la consola."); 
         }
       },
 
@@ -254,10 +246,9 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       },
 
       handleImportProject: async (file: File) => {
-        console.log(" [STORE] Importando archivo...");
-        set({ isLoading: true }); // Mostrar loading al importar
+        console.log("📥 [STORE] Importando archivo...");
+        set({ isLoading: true });
         
-        // 🔥 TIMEOUT DE SEGURIDAD para importación
         const safetyTimer = setTimeout(() => {
           console.warn("⏱️ [STORE] TIMEOUT: Importación colgada.");
           set({ isLoading: false });
@@ -266,14 +257,14 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         try {
           const data = await importProject(file);
           set({ rawNodes: data.rawNodes, simulationVars: data.simulationVars, currency: data.currency });
-          await get().recalculate(); // Esperar a que termine
+          await get().recalculate();
           clearTimeout(safetyTimer);
         } catch (err) {
           console.error("❌ [STORE] Error importando:", err);
           alert('Error al importar: ' + (err as Error).message);
           clearTimeout(safetyTimer);
         } finally {
-          set({ isLoading: false }); // Siempre desbloquear
+          set({ isLoading: false });
         }
       },
 
@@ -287,7 +278,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
 
         try {
           const input: MonteCarloInput = {
-            nodes: rawNodes,
+            nodes: rawNodes as any,
             iterations,
             ranges: simulationVars
           };
