@@ -12,9 +12,11 @@ export default function DataImporter({ onClose }: DataImporterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { loadCustomNodes } = useOmnisentinelStore();
 
   const handleFileSelect = (selectedFile: File) => {
+    console.log('📁 Archivo seleccionado:', selectedFile.name);
     if (!selectedFile.name.endsWith('.csv')) {
       setError('Por favor, selecciona un archivo CSV válido.');
       return;
@@ -31,42 +33,64 @@ export default function DataImporter({ onClose }: DataImporterProps) {
   };
 
   const handleProcess = () => {
-    if (!file) return;
+    if (!file) {
+      setError('No hay archivo seleccionado');
+      return;
+    }
 
-    // 🔥 FIX: Tipos explícitos para evitar TS7006 en Vercel
+    console.log('🔄 Iniciando procesamiento del CSV...');
+    setIsLoading(true);
+    setError(null);
+
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results: any) => {
+        console.log('✅ CSV parseado. Filas encontradas:', results.data.length);
+        
         try {
-          const previewNodes = results.data.map((row: any, index: number) => ({
-            id: row.id || `csv-${index}`,
-            name: row.name || 'Nodo sin nombre',
-            sector: (row.sector || 'OTRO').toUpperCase(),
-            riskBase: Number(row.riskBase) || 0,
-            daily_operation_cost: Number(row.daily_operation_cost) || 0,
-            parents: row.parents ? row.parents.split(';').map((p: string) => p.trim()) : [],
-            isKilled: false,
-            owner: row.owner || 'Sin asignar',
-            leakType: (row.leakType || 'OTRO').toUpperCase(),
-            actionPlan: row.actionPlan || '',
-            seniority: Number(row.seniority) || 0,
-            saturacionFlota: Number(row.saturacionFlota) || 0,
-            bloqueosCriticos: Number(row.bloqueosCriticos) || 0,
-            riesgoExterno: Number(row.riesgoExterno) || 0,
-            metadata: {},
-          }));
+          const previewNodes = results.data.map((row: any, index: number) => {
+            console.log(`Fila ${index}:`, row);
+            return {
+              id: row.id || `csv-${index}`,
+              name: row.name || 'Nodo sin nombre',
+              sector: (row.sector || 'OTRO').toUpperCase(),
+              riskBase: Number(row.riskBase) || 0,
+              daily_operation_cost: Number(row.daily_operation_cost) || 0,
+              parents: row.parents ? row.parents.split(';').map((p: string) => p.trim()) : [],
+              isKilled: false,
+              owner: row.owner || 'Sin asignar',
+              leakType: (row.leakType || 'OTRO').toUpperCase(),
+              actionPlan: row.actionPlan || '',
+              seniority: Number(row.seniority) || 0,
+              saturacionFlota: Number(row.saturacionFlota) || 0,
+              bloqueosCriticos: Number(row.bloqueosCriticos) || 0,
+              riesgoExterno: Number(row.riesgoExterno) || 0,
+              metadata: {},
+            };
+          });
 
+          console.log('📦 Nodos procesados:', previewNodes.length);
+          console.log('Primer nodo:', previewNodes[0]);
+
+          // Cargar en el store
+          console.log('🚀 Cargando nodos en el store...');
           loadCustomNodes(previewNodes as any);
+          
+          setIsLoading(false);
           onClose();
+          
+          alert(`✅ Importación exitosa: ${previewNodes.length} nodos cargados`);
         } catch (err: any) {
-          setError('Error al procesar el CSV. Revisa el formato.');
-          console.error(err);
+          console.error('❌ Error procesando nodos:', err);
+          setError('Error al procesar los datos: ' + err.message);
+          setIsLoading(false);
         }
       },
       error: (err: any) => {
-        setError('Error al leer el archivo CSV.');
-        console.error(err);
+        console.error('❌ Error en Papa.parse:', err);
+        setError('Error al leer el archivo CSV: ' + err.message);
+        setIsLoading(false);
       }
     });
   };
@@ -122,17 +146,17 @@ export default function DataImporter({ onClose }: DataImporterProps) {
           </div>
 
           <div className="bg-gray-900/50 rounded-lg p-4 text-sm text-gray-400 space-y-2">
-            <p className="font-bold text-gray-200 mb-2"> Formato esperado del CSV:</p>
+            <p className="font-bold text-gray-200 mb-2">📋 Columnas requeridas del CSV:</p>
             <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-              <div>• id (Texto)</div>
-              <div>• name (Texto)</div>
-              <div>• sector (LOGISTICA, SOFTWARE, etc.)</div>
-              <div>• riskBase (0-100)</div>
-              <div>• daily_operation_cost (Número)</div>
+              <div>✓ id (Texto único)</div>
+              <div>✓ name (Nombre del nodo)</div>
+              <div>✓ sector (LOGISTICA/SOFTWARE/FINANZAS/OTRO)</div>
+              <div>✓ riskBase (0-100)</div>
+              <div>✓ daily_operation_cost (Número)</div>
               <div>• parents (IDs separados por ;)</div>
-              <div>• owner (Texto)</div>
-              <div>• leakType (Texto)</div>
-              <div>• actionPlan (Texto)</div>
+              <div>• owner (Responsable)</div>
+              <div>• leakType (Tipo de fuga)</div>
+              <div>• actionPlan (Plan de acción)</div>
               <div>• seniority (Años)</div>
               <div>• saturacionFlota (0-1)</div>
               <div>• bloqueosCriticos (0-1)</div>
@@ -141,19 +165,32 @@ export default function DataImporter({ onClose }: DataImporterProps) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+            <button 
+              onClick={onClose} 
+              className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              disabled={isLoading}
+            >
               Cancelar
             </button>
             <button 
               onClick={handleProcess} 
-              disabled={!file}
+              disabled={!file || isLoading}
               className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all ${
-                file 
+                file && !isLoading
                   ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50' 
                   : 'bg-gray-800 text-gray-600 cursor-not-allowed'
               }`}
             >
-              <Upload size={18} /> Importar Datos
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <Upload size={18} /> Importar Datos
+                </>
+              )}
             </button>
           </div>
 
