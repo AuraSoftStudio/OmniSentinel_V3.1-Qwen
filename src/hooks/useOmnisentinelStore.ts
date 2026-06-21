@@ -125,7 +125,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         const safetyTimer = setTimeout(() => {
           console.warn("⏱️ [STORE] TIMEOUT: recalculate colgado.");
           set({ isLoading: false });
-        }, 5000);
+        }, 10000); // 🔥 Aumentado a 10s
 
         get().recalculate().finally(() => {
           clearTimeout(safetyTimer);
@@ -141,7 +141,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           return;
         }
         
-        console.log("⚙️ [V-CORE] Iniciando cálculo...");
+        console.log("⚙️ [V-CORE] Iniciando cálculo con", rawNodes.length, "nodos...");
         set({ isCalculating: true });
 
         try {
@@ -157,25 +157,45 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
             return s as ProjectNode;
           });
 
-          // 🔥 FIX: Type assertion para el resultado del worker
+          console.log("🔧 [V-CORE] Preparando llamada al worker...");
+          
+          // 🔥 FIX: Timeout aumentado a 15 segundos y mejor manejo
           const workerCall = vcoreWorker.processGraph(simulatedNodes as any);
-          const timeoutCall = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout del Worker (5s)")), 5000)
-          );
+          
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => {
+              console.error("⏱️ [V-CORE] TIMEOUT: El worker tardó más de 15s");
+              reject(new Error("Timeout del Worker (15s) - El cálculo está tomando demasiado tiempo"));
+            }, 15000); // 🔥 15 segundos en lugar de 5
+          });
 
-          const result: any = await Promise.race([workerCall, timeoutCall]);
+          console.log("⏳ [V-CORE] Esperando respuesta del worker...");
+          const result: any = await Promise.race([workerCall, timeoutPromise]);
+
+          console.log("✅ [V-CORE] Worker respondió exitosamente");
+          console.log("📊 [V-CORE] Nodos procesados:", result.nodes?.length);
 
           set({
-            processedNodes: result.nodes,
-            graphErrors: result.errors,
-            graphCycles: result.cycles,
+            processedNodes: result.nodes || [],
+            graphErrors: result.errors || [],
+            graphCycles: result.cycles || [],
             isCalculating: false,
             isSimulationActive: Object.values(simulationVars).some(r => r.min !== r.max || r.min !== 0 && r.min !== 100 && r.min !== 1)
           });
-          console.log("✅ [V-CORE] Éxito.");
-        } catch (err) {
-          console.error('❌ [V-CORE] Error:', err);
-          set({ isCalculating: false });
+        } catch (err: any) {
+          console.error('❌ [V-CORE] Error completo:', err);
+          console.error('Stack trace:', err.stack);
+          
+          // 🔥 FIX: Si falla, limpiamos el estado para que no quede colgado
+          set({ 
+            isCalculating: false,
+            processedNodes: [],
+            graphErrors: [err.message || 'Error desconocido en el cálculo'],
+            graphCycles: []
+          });
+          
+          // Mostrar alerta al usuario
+          alert('Error calculando riesgos: ' + err.message + '. Revisa la consola para más detalles.');
         }
       },
 
@@ -252,7 +272,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
         const safetyTimer = setTimeout(() => {
           console.warn("⏱️ [STORE] TIMEOUT: Importación colgada.");
           set({ isLoading: false });
-        }, 5000);
+        }, 10000);
 
         try {
           const data = await importProject(file);
