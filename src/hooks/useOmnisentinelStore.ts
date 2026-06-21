@@ -4,9 +4,12 @@ import { persist } from 'zustand/middleware';
 import { vcoreWorker } from '../services/vcoreService';
 import { idbStorage, exportProject, importProject } from '../services/storage';
 import { getApplicableActions } from '../config/actionPlans';
-import type { ProjectNode } from '../services/dataParser';
+import type { ProjectNode } from '../types/omnisentinel'; // Asegúrate de importar desde types
 import { wrap } from 'comlink';
 import type { MonteCarloInput, MonteCarloResult, SimulationRange } from '../core/montecarlo.worker';
+
+// 🔥 IMPORTAR TEMPLATE HARDCODEADO
+import { LOGISTICA_TEMPLATE } from '../data/logistica-template';
 
 // Inicializar Worker de Monte Carlo
 const McWorker = new Worker(new URL('../core/montecarlo.worker.ts', import.meta.url), { type: 'module' });
@@ -92,39 +95,33 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       isMcRunning: false,
       currency: 'USD',
 
-      // 🔥 FIX VERCEL: Carga segura con fetch desde /public
+      // 🔥 FIX: Carga segura sin red (Hardcoded)
       init: async () => {
         const { rawNodes } = get();
-        
-        // Si ya hay datos (por persistencia), recalcula y termina
+        // Si ya hay datos en memoria (por persistencia), recalcula y termina
         if (rawNodes.length > 0) {
-          console.log("✅ [STORE] Datos recuperados de IndexedDB. Recalculando...");
+          console.log("✅ [STORE] Datos recuperados. Recalculando...");
           get().recalculate();
           return;
         }
 
-        console.log(" [STORE] Primera carga. Obteniendo template...");
+        console.log("🚀 [STORE] Cargando template hardcodeado...");
         set({ isLoading: true });
 
-        try {
-          // Fetch directo a la carpeta public (funciona 100% en Vercel)
-          const response = await fetch('/data/logistica.json');
-          if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          
-          const nodes = await response.json();
-          console.log("📦 [STORE] Template cargado:", nodes.length, "nodos");
-          
-          get().loadCustomNodes(nodes);
-        } catch (error) {
-          console.error('❌ [STORE] Error cargando template:', error);
-          // 🔥 Seguridad: Nunca dejar la app en isLoading: true
-          set({ isLoading: false });
-          alert("Error cargando el template inicial. Revisa la consola o importa un CSV.");
-        }
+        // Simulamos un pequeño delay para que se vea el splash screen
+        setTimeout(() => {
+          try {
+            // Cargamos el template directamente desde el archivo JS
+            get().loadCustomNodes(LOGISTICA_TEMPLATE as unknown as ProjectNode[]);
+          } catch (e) {
+            console.error("❌ [STORE] Error cargando template:", e);
+            set({ isLoading: false });
+          }
+        }, 500);
       },
 
       loadCustomNodes: (nodes: ProjectNode[]) => {
-        console.log("📥 [STORE] Cargando nodos personalizados...");
+        console.log("📥 [STORE] Nodos cargados:", nodes.length);
         set({ rawNodes: nodes, isLoading: true, dataSource: 'CSV_IMPORT' });
         get().recalculate().finally(() => set({ isLoading: false }));
       },
@@ -164,13 +161,13 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           });
           console.log("✅ [V-CORE] Cálculo exitoso.");
         } catch (err) {
+          // 🔥 FIX: Si el worker falla, NO nos quedamos cargando para siempre
           console.error('❌ [V-CORE] Error crítico:', err);
           set({ isCalculating: false });
         }
       },
 
       toggleKillSwitch: (nodeId: string) => {
-        console.log(" [KILL SWITCH] Toggle:", nodeId);
         const { rawNodes } = get();
         set({ rawNodes: rawNodes.map(n => n.id === nodeId ? { ...n, isKilled: !n.isKilled } : n) });
         get().recalculate();
@@ -252,7 +249,6 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
             alert("Carga datos primero para ejecutar Monte Carlo");
             return;
         }
-        console.log(`🎲 [MONTE CARLO] Iniciando ${iterations} iteraciones...`);
         set({ isMcRunning: true, mcResults: null });
 
         try {
@@ -265,9 +261,8 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           const results = await mcWorker.runMonteCarloSimulation(input);
           
           set({ mcResults: results, isMcRunning: false });
-          console.log("✅ [MONTE CARLO] Simulación completada.");
         } catch (err) {
-          console.error('❌ [MONTE CARLO] Error:', err);
+          console.error('Error en Monte Carlo:', err);
           set({ isMcRunning: false });
         }
       }

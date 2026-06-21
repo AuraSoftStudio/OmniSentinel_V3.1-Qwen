@@ -1,0 +1,53 @@
+// src/data/logistica-template.ts
+
+// Definimos los datos directamente en el código para evitar errores de red en Vercel
+export const LOGISTICA_TEMPLATE = [
+  {
+    id: 'log-001',
+    name: 'Patio de Maniobras Cedis',
+    sector: 'LOGISTICA',
+    riskBase: 75,
+    daily_operation_cost: 1200,
+    parents: [],
+    isKilled: false,
+    owner: 'Carlos Ruiz - Jefe de Patio',
+    leakType: 'TIEMPOS_MUERTOS',
+    actionPlan: 'Implementar sistema de citas automáticas',
+    seniority: 5,
+    saturacionFlota: 0.5,
+    bloqueosCriticos: 0.1,
+    riesgoExterno: 0.1,
+  },
+  {
+    id: 'log-002',
+    name: 'Despacho a Cliente Final',
+    sector: 'LOGISTICA',
+    riskBase: 30,
+    daily_operation_cost: 800,
+    parents: ['log-001'],
+    isKilled: false,
+    owner: 'Ana Gómez - Gerente de Última Milla',
+    leakType: 'PENALIZACIONES_DOC',
+    actionPlan: 'Digitalizar guías y CFDI',
+    seniority: 3,
+    saturacionFlota: 0.3,
+    bloqueosCriticos: 0.05,
+    riesgoExterno: 0.05,
+  },
+  {
+    id: 'log-003',
+    name: 'Aduanas y Documentación',
+    sector: 'LOGISTICA',
+    riskBase: 60,
+    daily_operation_cost: 2500,
+    parents: [],
+    isKilled: false,
+    owner: 'Luis Mendoza - Coord. Aduanal',
+    leakType: 'FRAGMENTACION_INFO',
+    actionPlan: 'Unificar ERP con portal de aduanas',
+    seniority: 8,
+    saturacionFlota: 0.7,
+    bloqueosCriticos: 0.2,
+    riesgoExterno: 0.3,
+  }
+] as const;
