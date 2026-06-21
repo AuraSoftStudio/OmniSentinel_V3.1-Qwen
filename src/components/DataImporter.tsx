@@ -33,13 +33,13 @@ export default function DataImporter({ onClose }: DataImporterProps) {
   const handleProcess = () => {
     if (!file) return;
 
+    // 🔥 FIX: Tipos explícitos para evitar TS7006 en Vercel
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: (results: any) => {
         try {
-          // Mapeo básico de columnas del CSV a ProjectNode
-          const previewNodes = results.data.map((row: any, index) => ({
+          const previewNodes = results.data.map((row: any, index: number) => ({
             id: row.id || `csv-${index}`,
             name: row.name || 'Nodo sin nombre',
             sector: (row.sector || 'OTRO').toUpperCase(),
@@ -57,15 +57,14 @@ export default function DataImporter({ onClose }: DataImporterProps) {
             metadata: {},
           }));
 
-          // 🔥 FIX: Type assertion para evitar error de compilación en Vercel
           loadCustomNodes(previewNodes as any);
           onClose();
-        } catch (err) {
+        } catch (err: any) {
           setError('Error al procesar el CSV. Revisa el formato.');
           console.error(err);
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         setError('Error al leer el archivo CSV.');
         console.error(err);
       }
