@@ -1,49 +1,46 @@
 // src/types/omnisentinel.ts
 import { z } from 'zod';
 
-// 🚚 Catálogo de Fugas: Logística (Basado en tu análisis de mercado)
-export const LogisticsLeaks = [
-  'FRAGMENTACION_INFO', 'ORDENES_DUPLICADAS', 'TIEMPOS_MUERTOS', 
-  'PENALIZACIONES_DOC', 'FALTA_TRAZABILIDAD', 'SOBRECOSTOS_PROVEEDOR'
-] as const;
-
-// 💻 Catálogo de Fugas: Software
-export const SoftwareLeaks = [
-  'DEUDA_TECNICA', 'CLOUD_INEFICIENTE', 'VULNERABILIDAD_LATENTE', 
-  'ESCALABILIDAD', 'UX_DEFICIENTE', 'DESALINEACION_PROCESOS'
-] as const;
-
-export const LeakTypeEnum = z.enum([...LogisticsLeaks, ...SoftwareLeaks, 'OTRO']);
-export type LeakType = z.infer<typeof LeakTypeEnum>;
-
-// 💰 Impacto Financiero (El lenguaje del CFO)
-export const FinancialImpactSchema = z.object({
-  dailyLoss: z.number().min(0),
-  monthlyLoss: z.number().min(0),
-  yearlyLoss: z.number().min(0),
-  currency: z.enum(['USD', 'EUR', 'MXN']).default('USD')
-});
-export type FinancialImpact = z.infer<typeof FinancialImpactSchema>;
-
-// 🕸️ El Nodo Unificado (Data Contract)
+// 🔹 Schema de validación con Zod v4 (para runtime)
 export const ProjectNodeSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  sector: z.enum(['LOGISTICA', 'SOFTWARE', 'RRHH', 'FINANZAS', 'TI']),
+  sector: z.enum(['LOGISTICA', 'SOFTWARE', 'FINANZAS', 'OTRO']),
   riskBase: z.number().min(0).max(100),
-  
-  // Topología
-  parents: z.array(z.string()).default([]),
+  daily_operation_cost: z.number().min(0),
+  parents: z.array(z.string()),
   isKilled: z.boolean().default(false),
-  
-  // 💼 Negocio y Accionabilidad (Lo que exige el mercado)
-  owner: z.string().min(1, "Todo nodo debe tener un responsable (Owner)"),
-  leakType: LeakTypeEnum,
-  actionPlan: z.string().min(1, "Debe haber un plan de acción sugerido"),
-  financialImpact: FinancialImpactSchema,
-  
-  // Metadatos de Integración
-  jiraTicketId: z.string().optional(),
+  owner: z.string(),
+  leakType: z.enum([
+    'TIEMPOS_MUERTOS',
+    'PENALIZACIONES_DOC',
+    'FRAGMENTACION_INFO',
+    'ERROR_HUMANO',
+    'FALLO_TECNICO',
+    'OTRO'
+  ]),
+  actionPlan: z.string(),
+  seniority: z.number().min(0),
+  saturacionFlota: z.number().min(0).max(1),
+  bloqueosCriticos: z.number().min(0).max(1),
+  riesgoExterno: z.number().min(0).max(1),
+  // 🔥 FIX ZOD v4: record requiere (keyType, valueType)
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  exposedLoss: z.number().optional(),
 });
 
+// 🔹 Tipo TypeScript derivado del schema (para type-checking)
 export type ProjectNode = z.infer<typeof ProjectNodeSchema>;
+
+// 🔹 Tipos auxiliares para el store y simulación
+export type SimulationRange = {
+  min: number;
+  max: number;
+  distribution: 'UNIFORM' | 'NORMAL';
+};
+
+export type CurrencyCode = 'USD' | 'CLP';
+
+export type ViewMode = 'WAR_ROOM' | 'EXECUTIVE';
+
+export type DataSource = 'SHEETS' | 'TEMPLATE' | 'CSV_IMPORT';

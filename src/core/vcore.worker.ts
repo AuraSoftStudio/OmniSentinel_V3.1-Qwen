@@ -1,8 +1,9 @@
-// src/core/vcore/engine.ts
-import type { ProjectNode } from '../../services/dataParser';
+// src/core/vcore.worker.ts
+import { expose } from 'comlink';
+import type { ProjectNode } from '../services/dataParser';
 
 export interface ProcessedNode extends ProjectNode {
-  exposedLoss: number; // ← NUEVO: Pérdida diaria expuesta real
+  exposedLoss: number;
 }
 
 export interface ProcessGraphResult {
@@ -58,20 +59,14 @@ function calculateSystemicRisk(
   calculatedRisks: Map<string, number>,
   visitedInPath: Set<string> = new Set()
 ): number {
-  if (visitedInPath.has(nodeId)) {
-    return 0;
-  }
-  
-  if (calculatedRisks.has(nodeId)) {
-    return calculatedRisks.get(nodeId)!;
-  }
+  if (visitedInPath.has(nodeId)) return 0;
+  if (calculatedRisks.has(nodeId)) return calculatedRisks.get(nodeId)!;
   
   visitedInPath.add(nodeId);
   
   const node = nodeMap.get(nodeId);
   if (!node) return 0;
   
-  // 🔥 FIX: Si el nodo está KILLED, riesgo = 0 y NO contagia
   if (node.isKilled) {
     calculatedRisks.set(nodeId, 0);
     return 0;
@@ -86,9 +81,7 @@ function calculateSystemicRisk(
       calculatedRisks,
       new Set(visitedInPath)
     );
-    
-    const contagionWeight = 0.3;
-    systemicRisk += parentRisk * contagionWeight;
+    systemicRisk += parentRisk * 0.3;
   }
   
   systemicRisk += node.saturacionFlota * 20;
@@ -96,11 +89,11 @@ function calculateSystemicRisk(
   systemicRisk += node.riesgoExterno * 10;
   
   const clampedRisk = Math.max(0, Math.min(100, systemicRisk));
-  
   calculatedRisks.set(nodeId, clampedRisk);
   return clampedRisk;
 }
 
+// 🔥 EXPORTADO CORRECTAMENTE: La función se llama processGraph
 export function processGraph(nodes: ProjectNode[]): ProcessGraphResult {
   const errors: string[] = [];
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
@@ -122,19 +115,13 @@ export function processGraph(nodes: ProjectNode[]): ProcessGraphResult {
   const processedNodes: ProcessedNode[] = [];
   
   for (const node of nodes) {
-    const systemicRisk = calculateSystemicRisk(
-      node.id,
-      nodeMap,
-      calculatedRisks
-    );
-    
-    // 💰 CALCULAR PÉRDIDA EXPUESTA REAL
+    const systemicRisk = calculateSystemicRisk(node.id, nodeMap, calculatedRisks);
     const exposedLoss = node.daily_operation_cost * (systemicRisk / 100);
     
     processedNodes.push({
       ...node,
       riskBase: systemicRisk,
-      exposedLoss, // ← NUEVO CAMPO
+      exposedLoss,
       metadata: {
         ...node.metadata,
         originalRiskBase: node.riskBase,
@@ -152,3 +139,6 @@ export function processGraph(nodes: ProjectNode[]): ProcessGraphResult {
     errors
   };
 }
+
+// 🔥 FIX: Exponer con el mismo nombre 'processGraph' para que TypeScript no se queje
+expose({ processGraph });

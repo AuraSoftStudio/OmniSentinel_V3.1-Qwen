@@ -15,7 +15,7 @@ export function validateTopology(nodes: ProjectNode[]): TopologyError[] {
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
 
-  // Detectar ciclos con DFS
+  // Algoritmo DFS para detectar ciclos
   const hasCycle = (id: string): boolean => {
     if (recursionStack.has(id)) return true;
     if (visited.has(id)) return false;
@@ -35,7 +35,7 @@ export function validateTopology(nodes: ProjectNode[]): TopologyError[] {
   };
 
   for (const node of nodes) {
-    // 1. Validar Owner (cultural)
+    // 1. Validación Cultural: ¿Tiene dueño?
     if (!node.owner || node.owner.trim() === '') {
       errors.push({
         type: 'NO_OWNER',
@@ -46,7 +46,7 @@ export function validateTopology(nodes: ProjectNode[]): TopologyError[] {
       });
     }
 
-    // 2. Padres inexistentes
+    // 2. Padres inexistentes (Rompe el cálculo V-CORE)
     for (const parentId of node.parents) {
       if (!nodeMap.has(parentId)) {
         errors.push({
@@ -59,26 +59,28 @@ export function validateTopology(nodes: ProjectNode[]): TopologyError[] {
       }
     }
 
-    // 3. Cuellos de botella (>8 dependencias)
+    // 3. Cuellos de botella sistémicos (>8 dependencias)
     if (node.parents.length > 8) {
-      errors.push({
-        type: 'BOTTLENECK',
-        severity: 'WARNING',
-        nodeId: node.id,
-        nodeName: node.name,
-        message: `Riesgo de concentración: "${node.name}" tiene ${node.parents.length} dependencias.`
-      });
+       errors.push({
+         type: 'BOTTLENECK',
+         severity: 'WARNING',
+         nodeId: node.id,
+         nodeName: node.name,
+         message: `Riesgo de concentración: "${node.name}" depende de ${node.parents.length} factores.`
+       });
     }
 
-    // 4. Ciclos
+    // 4. Bucles infinitos (A depende de B, y B depende de A)
+    // Reiniciamos visited para cada nodo raíz potencial si quisiéramos ser exhaustivos, 
+    // pero para detección rápida de ciclos en grafos dirigidos, este enfoque es suficiente para MVP.
     if (hasCycle(node.id)) {
-      errors.push({
-        type: 'CYCLE',
-        severity: 'CRITICAL',
-        nodeId: node.id,
-        nodeName: node.name,
-        message: `Bucle infinito detectado en "${node.name}".`
-      });
+       errors.push({
+         type: 'CYCLE',
+         severity: 'CRITICAL',
+         nodeId: node.id,
+         nodeName: node.name,
+         message: `Bucle infinito detectado en "${node.name}". El V-CORE no puede calcular contagio circular.`
+       });
     }
   }
 

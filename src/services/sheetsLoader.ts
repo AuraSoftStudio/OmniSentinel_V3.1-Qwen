@@ -4,7 +4,7 @@ import { ProjectNodeSchema, type ProjectNode } from '../types/omnisentinel';
 
 // ⚠️ IMPORTANTE: Reemplaza esta URL con la de tu Google Sheet publicado como CSV
 // Para obtenerla: File > Share > Publish to web > Select "Comma-separated values (.csv)"
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTvyW5rgzdxFWXLb4uB-ICSeOm4NDcw8lIqQmAyE2FtYPFHB8ROWQ8UjQR2NucWsCjiNHkcbebmCKsw/pub?output=csv';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/pub?output=csv';
 
 // Función auxiliar simple para parsear CSV (sin librerías externas pesadas)
 function parseCSV(csvText: string): Record<string, string>[] {
