@@ -1,13 +1,15 @@
 // src/hooks/useOmnisentinelStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { vcoreWorker } from '../services/vcoreService';
+// import { vcoreWorker } from '../services/vcoreService'; // Ya no lo usamos
 import { idbStorage, exportProject, importProject } from '../services/storage';
 import { getApplicableActions } from '../config/actionPlans';
 import type { ProjectNode } from '../types/omnisentinel';
 import { wrap } from 'comlink';
 import type { MonteCarloInput, MonteCarloResult, SimulationRange } from '../core/montecarlo.worker';
 import { LOGISTICA_TEMPLATE } from '../data/logistica-template';
+//  NUEVO: Importamos la lógica directamente
+import { processGraph } from '../core/processGraph';
 
 const McWorker = new Worker(new URL('../core/montecarlo.worker.ts', import.meta.url), { type: 'module' });
 const mcWorker = wrap<typeof import('../core/montecarlo.worker')>(McWorker);
@@ -100,20 +102,13 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           return;
         }
 
-        console.log("🚀 [STORE] Cargando template hardcodeado...");
+        console.log(" [STORE] Cargando template hardcodeado...");
         set({ isLoading: true });
-
-        const safetyTimer = setTimeout(() => {
-          console.warn("⏱️ [STORE] TIMEOUT: Desbloqueando UI.");
-          set({ isLoading: false });
-        }, 5000);
 
         try {
           get().loadCustomNodes(LOGISTICA_TEMPLATE as unknown as ProjectNode[]);
-          clearTimeout(safetyTimer);
         } catch (e) {
           console.error("❌ [STORE] Error crítico:", e);
-          clearTimeout(safetyTimer);
           set({ isLoading: false });
         }
       },
@@ -121,16 +116,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       loadCustomNodes: (nodes: ProjectNode[]) => {
         console.log("📥 [STORE] Nodos cargados:", nodes.length);
         set({ rawNodes: nodes, isLoading: true, dataSource: 'CSV_IMPORT' });
-        
-        const safetyTimer = setTimeout(() => {
-          console.warn("⏱️ [STORE] TIMEOUT: recalculate colgado.");
-          set({ isLoading: false });
-        }, 10000); // 🔥 Aumentado a 10s
-
-        get().recalculate().finally(() => {
-          clearTimeout(safetyTimer);
-          set({ isLoading: false });
-        });
+        get().recalculate().finally(() => set({ isLoading: false }));
       },
 
       recalculate: async () => {
@@ -141,7 +127,7 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
           return;
         }
         
-        console.log("⚙️ [V-CORE] Iniciando cálculo con", rawNodes.length, "nodos...");
+        console.log("⚙️ [V-CORE] Iniciando cálculo directo...", rawNodes.length, "nodos");
         set({ isCalculating: true });
 
         try {
@@ -157,45 +143,21 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
             return s as ProjectNode;
           });
 
-          console.log("🔧 [V-CORE] Preparando llamada al worker...");
-          
-          // 🔥 FIX: Timeout aumentado a 15 segundos y mejor manejo
-          const workerCall = vcoreWorker.processGraph(simulatedNodes as any);
-          
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
-              console.error("⏱️ [V-CORE] TIMEOUT: El worker tardó más de 15s");
-              reject(new Error("Timeout del Worker (15s) - El cálculo está tomando demasiado tiempo"));
-            }, 15000); // 🔥 15 segundos en lugar de 5
-          });
-
-          console.log("⏳ [V-CORE] Esperando respuesta del worker...");
-          const result: any = await Promise.race([workerCall, timeoutPromise]);
-
-          console.log("✅ [V-CORE] Worker respondió exitosamente");
-          console.log("📊 [V-CORE] Nodos procesados:", result.nodes?.length);
+          // 🔥 FIX: Llamada directa a processGraph (sin worker, sin timeout)
+          const result = processGraph(simulatedNodes);
 
           set({
-            processedNodes: result.nodes || [],
-            graphErrors: result.errors || [],
-            graphCycles: result.cycles || [],
+            processedNodes: result.nodes,
+            graphErrors: result.errors,
+            graphCycles: result.cycles,
             isCalculating: false,
             isSimulationActive: Object.values(simulationVars).some(r => r.min !== r.max || r.min !== 0 && r.min !== 100 && r.min !== 1)
           });
+          console.log("✅ [V-CORE] Cálculo exitoso:", result.nodes.length, "nodos procesados");
         } catch (err: any) {
-          console.error('❌ [V-CORE] Error completo:', err);
-          console.error('Stack trace:', err.stack);
-          
-          // 🔥 FIX: Si falla, limpiamos el estado para que no quede colgado
-          set({ 
-            isCalculating: false,
-            processedNodes: [],
-            graphErrors: [err.message || 'Error desconocido en el cálculo'],
-            graphCycles: []
-          });
-          
-          // Mostrar alerta al usuario
-          alert('Error calculando riesgos: ' + err.message + '. Revisa la consola para más detalles.');
+          console.error('❌ [V-CORE] Error:', err);
+          set({ isCalculating: false });
+          alert('Error calculando riesgos: ' + err.message);
         }
       },
 
@@ -268,21 +230,14 @@ export const useOmnisentinelStore = create<OmnisentinelState>()(
       handleImportProject: async (file: File) => {
         console.log("📥 [STORE] Importando archivo...");
         set({ isLoading: true });
-        
-        const safetyTimer = setTimeout(() => {
-          console.warn("⏱️ [STORE] TIMEOUT: Importación colgada.");
-          set({ isLoading: false });
-        }, 10000);
 
         try {
           const data = await importProject(file);
           set({ rawNodes: data.rawNodes, simulationVars: data.simulationVars, currency: data.currency });
           await get().recalculate();
-          clearTimeout(safetyTimer);
         } catch (err) {
           console.error("❌ [STORE] Error importando:", err);
           alert('Error al importar: ' + (err as Error).message);
-          clearTimeout(safetyTimer);
         } finally {
           set({ isLoading: false });
         }
