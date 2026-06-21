@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { 
   RefreshCw, 
   FileDown, 
@@ -13,16 +13,25 @@ import {
 
 import { useOmnisentinelStore } from './hooks/useOmnisentinelStore';
 import { NodeCard } from './components/ui/NodeCard';
-// ❌ BORRADO: import { LossRadarReport } ... (Ahora es dinámico)
 import { ExecutiveSummary } from './components/executive/ExecutiveSummary';
 import DataImporter from './components/DataImporter';
 import SimulatorPanel from './components/SimulatorPanel';
 import NodeDetailDrawer from './components/NodeDetailDrawer';
 
+// 🔥 LAZY LOAD corregido: extraer el componente nombrado como default
+const LossRadarReport = lazy(() => 
+  import('./components/executive/LossRadarReport').then(module => ({ 
+    default: module.LossRadarReport 
+  }))
+);
+
 function App() {
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  
+  // 🔥 GUARD DE MONTAJE: Evita error de hidratación #419
+  const [isMounted, setIsMounted] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,19 +49,25 @@ function App() {
   } = useOmnisentinelStore();
 
   useEffect(() => {
+    // Marcar como montado solo en el cliente
+    setIsMounted(true);
     init();
   }, [init]);
 
-  // 🔥 OPTIMIZACIÓN: Carga dinámica del PDF y la librería
-  // Esto reduce el bundle inicial en ~800KB
+  // 🔥 Carga dinámica del PDF + librerías pesadas
   const handleDownloadPdf = async () => {
     try {
-      // Importamos solo cuando el usuario hace clic
-      const { LossRadarReport } = await import('./components/executive/LossRadarReport');
+      // Importaciones dinámicas (solo se cargan al hacer clic)
       const { pdf } = await import('@react-pdf/renderer');
       const { saveAs } = await import('file-saver');
 
-      const doc = <LossRadarReport />;
+      // Renderizar el componente lazy
+      const doc = (
+        <Suspense fallback={null}>
+          <LossRadarReport />
+        </Suspense>
+      );
+      
       const asBlob = await pdf(doc).toBlob();
       saveAs(asBlob, 'Omnisentinel_Loss_Radar_Report.pdf');
     } catch (error) {
@@ -73,12 +88,28 @@ function App() {
     }
   };
 
+  // 🔥 Renderizar loading estático mientras no esté montado
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="text-center">
+          <ShieldAlert className="w-16 h-16 text-red-600 mx-auto mb-4 animate-pulse" />
+          <div className="text-red-500 text-xl font-mono animate-pulse">
+            INICIALIZANDO MOTOR V-CORE...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="text-red-500 text-xl animate-pulse font-mono flex items-center gap-2">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          INICIALIZANDO MOTOR V-CORE...
+      <div className="flex items-center justify-center min-h-screen bg-[#050505]">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-red-500 mx-auto mb-4 animate-spin" />
+          <div className="text-red-500 text-xl font-mono animate-pulse">
+            INICIALIZANDO MOTOR V-CORE...
+          </div>
         </div>
       </div>
     );
