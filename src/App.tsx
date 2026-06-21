@@ -18,7 +18,6 @@ import DataImporter from './components/DataImporter';
 import SimulatorPanel from './components/SimulatorPanel';
 import NodeDetailDrawer from './components/NodeDetailDrawer';
 
-// 🔥 LAZY LOAD corregido: extraer el componente nombrado como default
 const LossRadarReport = lazy(() => 
   import('./components/executive/LossRadarReport').then(module => ({ 
     default: module.LossRadarReport 
@@ -29,14 +28,13 @@ function App() {
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
-  
-  // 🔥 GUARD DE MONTAJE: Evita error de hidratación #419
   const [isMounted, setIsMounted] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { 
     processedNodes, 
+    rawNodes,
     init, 
     isLoading, 
     isCalculating,
@@ -45,23 +43,20 @@ function App() {
     selectedNodeId,
     setSelectedNode,
     handleExportProject,
-    handleImportProject
+    handleImportProject,
+    graphErrors
   } = useOmnisentinelStore();
 
   useEffect(() => {
-    // Marcar como montado solo en el cliente
     setIsMounted(true);
     init();
   }, [init]);
 
-  // 🔥 Carga dinámica del PDF + librerías pesadas
   const handleDownloadPdf = async () => {
     try {
-      // Importaciones dinámicas (solo se cargan al hacer clic)
       const { pdf } = await import('@react-pdf/renderer');
       const { saveAs } = await import('file-saver');
 
-      // Renderizar el componente lazy
       const doc = (
         <Suspense fallback={null}>
           <LossRadarReport />
@@ -88,14 +83,13 @@ function App() {
     }
   };
 
-  // 🔥 Renderizar loading estático mientras no esté montado
   if (!isMounted) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="text-center">
           <ShieldAlert className="w-16 h-16 text-red-600 mx-auto mb-4 animate-pulse" />
           <div className="text-red-500 text-xl font-mono animate-pulse">
-            INICIALIZANDO MOTOR V-CORE...
+            INICIALIZANDO OMNISENTINEL...
           </div>
         </div>
       </div>
@@ -108,7 +102,7 @@ function App() {
         <div className="text-center">
           <Loader2 className="w-16 h-16 text-red-500 mx-auto mb-4 animate-spin" />
           <div className="text-red-500 text-xl font-mono animate-pulse">
-            INICIALIZANDO MOTOR V-CORE...
+            CARGANDO DATOS...
           </div>
         </div>
       </div>
@@ -119,9 +113,9 @@ function App() {
     <div className="min-h-screen bg-[#050505] text-gray-200 font-sans relative">
       
       {isCalculating && (
-        <div className="fixed top-24 right-6 bg-black/90 backdrop-blur-md border border-red-500/50 rounded-lg p-3 flex items-center gap-3 z-50 shadow-lg shadow-red-900/20 animate-in fade-in slide-in-from-top-2">
-          <Loader2 className="w-4 h-4 text-red-400 animate-spin" />
-          <span className="text-xs font-bold text-gray-200 uppercase tracking-wider">Calculando Topología...</span>
+        <div className="fixed top-24 right-6 bg-black/90 backdrop-blur-md border border-yellow-500/50 rounded-lg p-3 flex items-center gap-3 z-50 shadow-lg shadow-yellow-900/20 animate-in fade-in slide-in-from-top-2">
+          <Loader2 className="w-4 h-4 text-yellow-400 animate-spin" />
+          <span className="text-xs font-bold text-gray-200 uppercase tracking-wider">Procesando nodos...</span>
         </div>
       )}
 
@@ -195,13 +189,13 @@ function App() {
                 onClick={() => setViewMode('WAR_ROOM')} 
                 className={`px-4 py-2 rounded text-sm font-medium transition-all ${viewMode === 'WAR_ROOM' ? 'bg-red-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
               >
-                War Room
+                Sala de guerra
               </button>
               <button 
                 onClick={() => setViewMode('EXECUTIVE')} 
                 className={`px-4 py-2 rounded text-sm font-medium transition-all ${viewMode === 'EXECUTIVE' ? 'bg-blue-600/20 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
               >
-                Executive
+                Ejecutivo
               </button>
             </div>
             
@@ -216,7 +210,26 @@ function App() {
       </header>
 
       <main className="p-6">
-        {processedNodes.length === 0 ? (
+        {/* 🔥 FIX: Mostrar errores del worker si existen */}
+        {graphErrors && graphErrors.length > 0 && (
+          <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-500/50 rounded-lg">
+            <h3 className="text-yellow-400 font-bold mb-2 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              Advertencias de Cálculo
+            </h3>
+            <ul className="text-sm text-yellow-200 space-y-1">
+              {graphErrors.map((error, idx) => (
+                <li key={idx}>• {error}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-yellow-300 mt-2">
+              Los nodos se muestran sin cálculo de riesgo sistémico. El worker puede estar inactivo.
+            </p>
+          </div>
+        )}
+
+        {/* 🔥 FIX: Usar processedNodes si existe, sino rawNodes */}
+        {(processedNodes.length === 0 && rawNodes.length === 0) ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <ShieldAlert className="w-16 h-16 text-gray-700 mb-4" />
             <h3 className="text-xl font-bold text-gray-500 mb-2">No hay datos cargados</h3>
@@ -226,7 +239,8 @@ function App() {
           </div>
         ) : viewMode === 'WAR_ROOM' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {processedNodes.map((node: any) => (
+            {/* 🔥 FIX: Mostrar processedNodes o rawNodes fallback */}
+            {(processedNodes.length > 0 ? processedNodes : rawNodes).map((node: any) => (
               <NodeCard 
                 key={node.id} 
                 id={node.id}
