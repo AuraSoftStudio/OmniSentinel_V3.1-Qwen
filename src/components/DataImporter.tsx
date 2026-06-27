@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { X, Upload, Check, AlertTriangle, FileText } from 'lucide-react';
+import { X, Upload, Check, FileText } from 'lucide-react';
 import { useOmnisentinelStore } from '../hooks/useOmnisentinelStore';
 import Papa from 'papaparse';
 
-interface DataImporterProps { onClose: () => void; }
+interface DataImporterProps {
+  onClose: () => void;
+}
 
 export default function DataImporter({ onClose }: DataImporterProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -54,7 +56,7 @@ export default function DataImporter({ onClose }: DataImporterProps) {
             saturacionFlota: Math.min(1, Math.max(0, Number(row.saturacionFlota) || 0)),
             bloqueosCriticos: Math.min(1, Math.max(0, Number(row.bloqueosCriticos) || 0)),
             riesgoExterno: Math.min(1, Math.max(0, Number(row.riesgoExterno) || 0)),
-            exposedLoss: 0, // 🔑 CRÍTICO: Evita crash en NodeCard
+            exposedLoss: 0,
             metadata: {},
           }));
 

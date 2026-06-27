@@ -1,7 +1,15 @@
 import type { ProjectNode } from '../types/omnisentinel';
 
-export interface ProcessedNode extends ProjectNode { exposedLoss: number; }
-export interface ProcessGraphResult { success: boolean; nodes: ProcessedNode[]; cycles: string[]; errors: string[]; }
+export interface ProcessedNode extends ProjectNode {
+  exposedLoss: number;
+}
+
+export interface ProcessGraphResult {
+  success: boolean;
+  nodes: ProcessedNode[];
+  cycles: string[];
+  errors: string[];
+}
 
 function detectCycles(nodes: ProjectNode[]): string[] {
   const cycles: string[] = [];
@@ -16,7 +24,9 @@ function detectCycles(nodes: ProjectNode[]): string[] {
       return true;
     }
     if (visited.has(id)) return false;
-    visited.add(id); recursionStack.add(id); path.push(id);
+    visited.add(id);
+    recursionStack.add(id);
+    path.push(id);
     const node = nodeMap.get(id);
     if (node) {
       for (const parentId of node.parents || []) {
@@ -27,7 +37,9 @@ function detectCycles(nodes: ProjectNode[]): string[] {
     return false;
   };
 
-  for (const node of nodes) if (!visited.has(node.id)) hasCycle(node.id);
+  for (const node of nodes) {
+    if (!visited.has(node.id)) hasCycle(node.id);
+  }
   return cycles;
 }
 
